@@ -1,0 +1,38 @@
+name: Clean expired branches
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Delete branches older than 3 hours
+        run: |
+          NOW=$(date +%s)
+          THREE_HOURS_AGO=$((NOW - 21600))  # 3 ساعت قبل
+
+          git branch -r | grep 'origin/user_' | while read branch; do
+            timestamp=$(echo "$branch" | grep -oP 'user_.*_\K\d+')
+            if [ -n "$timestamp" ]; then
+              if [ "$timestamp" -lt "$THREE_HOURS_AGO" ]; then
+                branch_name=${branch#origin/}
+                echo "Deleting old branch: $branch_name (created at $timestamp)"
+                git push origin --delete "$branch_name" || echo "Failed to delete $branch_name"
+              else
+                echo "Skipping $branch (timestamp $timestamp) - not expired yet"
+              fi
+            else
+              echo "Skipping $branch - no timestamp found"
+            fi
+          done
